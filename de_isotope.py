@@ -9,7 +9,7 @@ from collections import defaultdict
 
 # matplotlib.style.use('ggplot')
 root_dir = r'D:\vm_share_folder\DDA_lib\01RT_QC\result'
-file_name = 'corrected_pos_1.csv'
+file_name = 'corrected_pos_1_0.csv'
 
 def read_file(root_d, file_n):
     """
@@ -161,6 +161,7 @@ def merge_two_cluster(c1, c2, clusters, all_cluster_id, raw_data):
     :param c2: cluster 2, cluster Class
     :param clusters: all clusters Class
     :param all_cluster_id: a list contains all cluster id
+    :param raw_data: raw data, a data frame
     :return: new clusters, new all_cluster_id
     """
     keep_c = c1  # keep this cluster after merge
@@ -191,13 +192,50 @@ def get_cluster_central_coor(raw_data, clusters):
     g_cluster_coor = {'rt': [], 'mz': []}  # grouped cluster coordinate
     # grouped key points' name list
     key_gr_name = list(raw_data[(raw_data.grouped==1) & (raw_data.key_point==1)].loc[:, 'name'])
-    for (i, c) in clusters:  # c is a cluster class
+    for i in clusters:
+        c = clusters[i]  # c is a cluster class
         if c.key_point in key_gr_name:
             g_cluster_id.append(i)
             g_cluster_coor['rt'].append(clusters[i].central_coor[0])
             g_cluster_coor['mz'].append(clusters[i].central_coor[1])
-    return pd.DataFrame({'cluster_id': g_cluster_id,
+    clusters_coor = pd.DataFrame({'cluster_id': g_cluster_id,
                          'rt': g_cluster_coor['rt'], 'mz': g_cluster_coor['mz']})
+    clusters_coor = clusters_coor.set_index(['cluster_id'])
+    return clusters_coor[['rt', 'mz']]
+
+
+def compare_clusters_by_coor(grouped_cluster1_coor, cluster2_coor, cluster_collection, name2cluster_id):
+    """
+    compare two clusters(each may contain lot of points) by coordinate(normalized rt/mz pair)
+    and find pair clusters list that distance less than 1
+    :param grouped_cluster1_coor: a data frame contains grouped clusters' coordinate
+    :param cluster2_coor: another data frame, can same as cluster1_coor
+    :return: a list has element of cluster pair, [(cluster_1, cluster_2), (cluster_m, cluster_n), ...]
+    """
+    cluster_pairs = []
+    points_coor_array_1 = grouped_cluster1_coor.values
+    points_coor_array_2 = cluster2_coor.values
+    points_dis = get_distance(points_coor_array_1, points_coor_array_2)
+    if grouped_cluster1_coor is cluster2_coor:  # inner clusters, a square matrix
+        inx_l = np.tril_indices(points_dis.shape[0])  # the indices for the lower-triangle of points_dis
+        points_dis[inx_l] = 10  # give lower-triangle indices a value bigger than 1
+    less_than_one_inx = np.where(points_dis < 1)  # all the points' location that distance is less that 1
+    print(less_than_one_inx)
+    
+    for i in range(len(less_than_one_inx[0])):
+        _1 = less_than_one_inx[0][i]
+        _2 = less_than_one_inx[1][i]
+        #TODO: here has some problem, we may can try cluster id as index for both cluster2
+        peak1 = grouped_cluster1_coor.iloc[_1].name   
+        peak2 = cluster2_coor.iloc[_2].name
+        c1 = cluster_collection[name2cluster_id[peak1]]
+        c2 = cluster_collection[name2cluster_id[peak2]]
+        # need to compare MS2
+        # merge two points that the distance less than 1
+        print(peak1, peak2)
+        cluster_pairs.append((c1, c2))
+        name2cluster_id[peak2] = c1.id
+    return {'cluster_pairs': cluster_pairs, 'points_dis': points_dis}
 
 def rt_ms1_compare(raw_data, cache, rt_tol, ms1_tol):
     cluster_collection = cache['cluster_collection']
@@ -207,45 +245,58 @@ def rt_ms1_compare(raw_data, cache, rt_tol, ms1_tol):
     name2point_coor = normalize_rt_ms1(raw_data.copy(), rt_tol=rt_tol, ms1_tol=ms1_tol, clusters=cluster_collection)
     # all the peaks that were marked as key point and be grouped
     key_points_g = raw_data[(raw_data.grouped==1) & (raw_data.key_point==1)]
-    no_group_peaks = raw_data[raw_data.grouped==0]  # all no group peaks    
     key_points_g_coor = name2point_coor.loc[key_points_g['name']]
-    no_group_peaks_coor = name2point_coor.loc[no_group_peaks['name']]
-
     ##  grouped key points dereplication
     # ax = plt.subplot(111)
     # plt.scatter(x=key_points_coor['rt'], y=key_points_coor['mz'])
     # plt.savefig('key_points2.png', dpi=200)
-    key_points_g_coor_array = key_points_g_coor.values
-    key_points_inner_dis = get_distance(key_points_g_coor_array, key_points_g_coor_array)
-    inx_l = np.tril_indices(key_points_inner_dis.shape[0])  # the indices for the lower-triangle of key_points_inner_dis
-    key_points_inner_dis[inx_l] = 10  # give lower-triangle indices a value bigger than 1
-    less_than_one_inx = np.where(key_points_inner_dis < 1)  # all the points' location that distance is less that 1
-    # plt.scatter(x=less_than_one_inx[0], y= less_than_one_inx[1])
-    # name2isotope = raw_data.set_index('name')['is_iso'].to_dict()
-    for i in range(len(less_than_one_inx[0])):
-        _1 = less_than_one_inx[0][i]
-        _2 = less_than_one_inx[1][i]
-        peak1 = key_points_g_coor.iloc[_1].name
-        peak2 = key_points_g_coor.iloc[_2].name
-        c1 = cluster_collection[name2cluster_id[peak1]]
-        c2 = cluster_collection[name2cluster_id[peak2]]
-        # need to compare MS2
-        # merge two points that the distance less than 1
-        print(peak1, peak2)
+    cluster_pairs_1 = compare_clusters_by_coor(grouped_cluster1_coor=key_points_g_coor,
+                                             cluster2_coor=key_points_g_coor,
+                                             cluster_collection=cluster_collection,
+                                             name2cluster_id=name2cluster_id)
+    # merge two points that the distance less than 1
+    for (c1, c2) in cluster_pairs_1['cluster_pairs']:
         # We can change cluster_collection and all_cluster_id in function merge_two_cluster directly
         # always merge c2 to c1
-        merge_two_cluster(c1, c2, clusters=cluster_collection, all_cluster_id=all_cluster_id)
-        name2cluster_id[peak2] = c1.id
+        merge_two_cluster(c1, c2, clusters=cluster_collection, all_cluster_id=all_cluster_id, raw_data=raw_data)
     # also need to check the distance among key_points
     # ...
-
     ## no group point dereplication
     # grouped clusters central coordinate
+    no_group_peaks = raw_data[raw_data.grouped==0]  # all no group peaks  
+    no_group_peaks_coor = name2point_coor.loc[no_group_peaks['name']]
+    max_cluster_num = 2000.0
+    segment_num = int(np.ceil(len(no_group_peaks_coor)/max_cluster_num))
+    inx_list = np.arange(segment_num, dtype=int)
+    inx_list = np.append(inx_list, [-1])
+    clusters = cluster_collection
     gc_cen_coor = get_cluster_central_coor(raw_data, cluster_collection)
-    no_group_peaks_coor_array = no_group_peaks_coor.values
-    for j in list(no_group_peaks_coor.index):
-        # compare each j with gc_cen_coor
-        pass
+    all_cluster_pairs = []
+    all_points_dis = []
+    i = 0
+    for i in range(segment_num):
+        i_for = inx_list[i] * int(max_cluster_num)
+        i_back = inx_list[i+1] * int(max_cluster_num)
+        if inx_list[i+1] == -1:
+            i_back = inx_list[i+1]
+        print(i_for, i_back)
+        current_no_group_peaks_coor = no_group_peaks_coor[i_for:i_back]
+        print(len(current_no_group_peaks_coor))
+        grouped_cluster1_coor=gc_cen_coor
+        cluster2_coor=current_no_group_peaks_coor
+        cluster_pairs_2 = compare_clusters_by_coor(grouped_cluster1_coor=gc_cen_coor,
+                                                 cluster2_coor=current_no_group_peaks_coor,
+                                                 cluster_collection=cluster_collection,
+                                                 name2cluster_id=name2cluster_id)
+        all_cluster_pairs += cluster_pairs_2['cluster_pairs']
+        all_points_dis.append(cluster_pairs_2['points_dis'])
+    print(all_cluster_pairs)
+    # merge two points that the distance less than 1
+    if all_cluster_pairs:
+        for (c1, c2) in all_cluster_pairs:
+            # We can change cluster_collection and all_cluster_id in function merge_two_cluster directly
+            # always merge c2 to c1
+            merge_two_cluster(c1, c2, clusters=cluster_collection, all_cluster_id=all_cluster_id, raw_data=raw_data)
 
 
 
