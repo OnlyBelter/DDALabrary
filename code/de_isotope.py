@@ -1,5 +1,5 @@
 import re
-from cluster import Cluster
+from .cluster import Cluster
 
 
 def de_isotope(raw_data, sample_name):

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from public_helper import get_distance
+from .public_helper import get_distance
 
 
 class Cluster():

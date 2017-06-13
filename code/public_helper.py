@@ -4,6 +4,7 @@ import numpy as np
 
 def get_distance(p_a, p_b):
     """
+    Python 3 needs smaller memory
     Find the Euclidean distances between p_a and p_b
     https://docs.scipy.org/doc/scipy-0.19.0/reference/generated/scipy.spatial.distance.cdist.html
     :param p_a: a numpy array, one point or multiple points
@@ -11,15 +12,15 @@ def get_distance(p_a, p_b):
     :return: distance, a scale
     """
     print(p_a.shape, p_b.shape)
-    p_b_lines_num = p_b.shape[0]
+    p_a_lines_num = p_a.shape[0]
     part_num = 1
-    if p_b_lines_num > 1500:
-        part_num = divmod(p_b_lines_num, 1500)[0]
-    p_b_list = np.array_split(p_b, part_num)
-    print(len(p_b_list))
+    if p_a_lines_num > 2048:
+        part_num = divmod(p_a_lines_num, 2048)[0]
+    p_a_list = np.array_split(p_a, part_num)
+    print(len(p_a_list))
     result = []
-    for i in p_b_list:
+    for i in p_a_list:
         print(i.shape)
-        dis = distance.cdist(p_a, i, 'euclidean')
+        dis = distance.cdist(i, p_b, 'euclidean')
         result.append(dis)
-    return np.hstack(result)
+    return np.vstack(result)

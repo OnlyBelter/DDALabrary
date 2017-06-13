@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from cluster import compare_clusters_by_coor
-from cluster import merge_cluster_pairs
+from .cluster import compare_clusters_by_coor
+from .cluster import merge_cluster_pairs
 
 def normalize_rt_ms1(raw_data, rt_tol=10, ms1_tol=0.01, clusters={}):
     """
