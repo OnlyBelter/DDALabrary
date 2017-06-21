@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
-from .public_helper import get_distance
+try:
+    from public_helper import get_distance
+except:
+    from .public_helper import get_distance
 
 
 class Cluster():
@@ -151,3 +154,47 @@ def compare_clusters_by_coor(grouped_cluster1_coor, cluster2_coor, cluster_colle
         cluster_pairs.append((c1, c2))
         # name2cluster_id[peak2] = c1.id
     return {'cluster_pairs': cluster_pairs}
+
+
+class MS2Info():
+    """
+    a special data structure defined by self to store ms2 information
+    """
+    def __init__(self, ms2_name, sample_name):
+        # (ms2_name, sample_name) is the primary key for a cluster
+        self.name = ms2_name
+        self.mz = []  # segment m/z
+        self.intensity = []  # each segment intensity
+        self.segment_num = 0  # total segment number
+        self.max_int = 0  # max intensity in all segment
+        self.sample_name = sample_name  # sample name, a string
+
+    def add_mz(self, mz):
+        self.mz.append(float(mz))
+
+    def add_int(self, intensity):
+        self.intensity.append(float(intensity))
+
+    def get_max_int(self):
+        self.max_int = max(self.intensity)
+        return self.max_int
+
+    def get_segment_num(self):
+        self.segment_num = len(self.mz)
+        return self.segment_num
+
+    def get_mz(self):
+        return self.mz
+
+    def get_int(self):
+        return self.intensity
+
+    def remove_by_inx(self, inx):
+        """
+        remove m/z and correspond intensity through index
+        :param inx: a list, eg: [1, 3, 4]
+        :return:
+        """
+        self.mz = list(np.delete(np.array(self.mz), inx))
+        self.intensity = list(np.delete(np.array(self.intensity), inx))
+        self.segment_num = len(self.mz)

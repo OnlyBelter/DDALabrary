@@ -44,7 +44,7 @@ def main(params):
     ms1_tol = 0.01
     rt_ms1_compare_result = rt_ms1_compare(raw_data, cluster_collection, rt_tol=rt_tol, ms1_tol=ms1_tol)
     raw_data2 = rt_ms1_compare_result['raw_data']
-    raw_data2.to_csv(os.path.join(root_dir, 'result4.csv'))
+    raw_data2.to_csv(os.path.join(root_dir, 'ms1_compare_result.csv'))
 
 
 if __name__ == '__main__':
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('file_path', type=str,
                         help='the result file comes from MetAnalyser and need to correct RT')
     parser.add_argument('file_name', default='result.csv', type=str, help='file name')
-    args = parser.parse_args([r'D:\vm_share_folder\DDA_lib\01RT_QC\result', 'corrected_pos_1_0.csv'])
+    args = parser.parse_args([r'D:\vm_share_folder\DDA_lib\01RT_QC\result', 'corrected_pos_1.csv'])
     params = vars(args)  # convert to ordinary dict
     print('parsed parameters: ')
     print(json.dumps(params, indent=2))
