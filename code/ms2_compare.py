@@ -2,12 +2,14 @@ import os
 import re
 try:
     from cluster import MS2Info
-    from public_helper import get_ms_pair
+    from public_helper import get_mz_pair
 except:
     from .cluster import MS2Info
-    from .public_helper import get_ms_pair
+    from .public_helper import get_mz_pair
 import json
 import numpy as np
+import pandas as pd
+
 
 
 root_d = r'D:\vm_share_folder\DDA_lib\02MS2_match'
@@ -37,6 +39,7 @@ def read_msp(root_d, ms2_f, sample_name):
                 all_ms2[inx].add_int(intensity)
     return all_ms2
 
+
 def print_ms2_info(root_d, ms2_dic, file_n):
     """
     print ms2 info as json file
@@ -56,6 +59,7 @@ def print_ms2_info(root_d, ms2_dic, file_n):
         ms2_info_dic[i]['sample_name'] = ms2_info[i].sample_name
     with open(os.path.join(root_d, file_n), 'a') as f_handle:
         json.dump(ms2_info_dic, f_handle, indent=2)
+
 
 def ms2_pre_process(root_d, ms2_f, output_f, sample_name, tol_mz=0.01):
 
@@ -80,7 +84,7 @@ def ms2_pre_process(root_d, ms2_f, output_f, sample_name, tol_mz=0.01):
         ms2_info = ms2_info_all[ms2]
         int_array = np.array(ms2_info.get_int()) # intensity
         mz_array = np.array(ms2_info.get_mz())
-        mz_pairs = get_ms_pair(mz_array, tol_mz=0.01) # m/z pair in the same m/z bin
+        mz_pairs = get_mz_pair(mz_array, tol_mz=0.01) # m/z pair in the same m/z bin
         need_remove_inx = []
         if mz_pairs:
             for pair in mz_pairs:
@@ -102,4 +106,49 @@ def ms2_pre_process(root_d, ms2_f, output_f, sample_name, tol_mz=0.01):
     # print_ms2_info(root_d, ms2_info_all.copy(), file_n=sample_name + '_after_remove_ring_effect2.json')
 
 
-ms2_pre_process(root_d, ms2_spec_file, output_f='after_processed_ms2.json', sample_name=sample_name)
+def ms2_compare(peak_name1, peak_name2, ms2_info_all, compare_method):
+    """
+    this function is used to compare two different peaks, if they have similar ms1 and rt
+    :param peak_name1:
+    :param peak_name2:
+    :param ms2_info_all: MS2 information, a json file
+    :param compare_method: forward or reverse
+    :return:
+    """
+    with open(ms2_info_all, 'r') as f_handle:
+        ms2_info = json.load(f_handle)
+    peak1 = ms2_info[peak_name1]
+    peak2 = ms2_info[peak_name2]
+    peak1_dic = {peak1['mz'][i]: peak1['int'][i] for i in range(len(peak1['mz']))}
+    peak2_dic = {peak2['mz'][i]: peak2['int'][i] for i in range(len(peak2['mz']))}
+    mz_union_list = np.unique(np.array(list(peak1_dic.keys()) + list(peak2_dic.keys())))
+    peak_union_df = pd.DataFrame(data=[mz_union_list], index=['mz']).T
+    peak1_union = peak_union_df.copy()
+    peak2_union = peak_union_df.copy()
+    peak1_union['int'] = [peak1_dic.get(mz, 0) for mz in mz_union_list]
+    peak2_union['int'] = [peak2_dic.get(mz, 0) for mz in mz_union_list]
+    # print(mz_union_list)
+    # print(peak1_union)
+    # print(peak2_union)
+    mz_pairs = get_mz_pair(mz_union_list, tol_mz=0.01)
+    # print(mz_pairs)
+    need_remove_inx = []
+    for pair in mz_pairs:
+        inx = pair['inx'] # a list contains two elements, [0, 1]
+        p1_pair_int = peak1_union.loc[inx].int
+        p2_pair_int = peak2_union.loc[inx].int
+        peak1_union.loc[inx, 'int'] = max(p1_pair_int)
+        peak2_union.loc[inx, 'int'] = max(p2_pair_int)
+        need_remove_inx.append(inx[0])
+    peak1_union = peak1_union.drop(need_remove_inx)
+    peak2_union = peak2_union.drop(need_remove_inx)
+    print(peak1_union)
+    print(peak2_union)
+    print(need_remove_inx)
+    # need to calculate dot product between these two peaks
+
+
+
+# ms2_pre_process(root_d, ms2_spec_file, output_f='after_processed_ms2.json', sample_name=sample_name)
+ms2_info_file = os.path.join(root_d, 'urine1_after_remove_ring_effect2.json')
+ms2_compare('M137T542', 'M137T555', ms2_info_file, 'forward')

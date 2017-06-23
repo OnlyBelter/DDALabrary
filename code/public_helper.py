@@ -26,7 +26,7 @@ def get_distance(p_a, p_b):
     return np.vstack(result)
 
 
-def get_ms_pair(mz_list, tol_mz):
+def get_mz_pair(mz_list, tol_mz):
     """
     this function can calculate m/z distance in MS2 for each peak
     :param mz_list: a numpy array, m/z list
