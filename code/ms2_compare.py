@@ -9,6 +9,7 @@ except:
 import json
 import numpy as np
 import pandas as pd
+from numpy.linalg import norm
 
 
 
@@ -106,46 +107,80 @@ def ms2_pre_process(root_d, ms2_f, output_f, sample_name, tol_mz=0.01):
     # print_ms2_info(root_d, ms2_info_all.copy(), file_n=sample_name + '_after_remove_ring_effect2.json')
 
 
-def ms2_compare(peak_name1, peak_name2, ms2_info_all, compare_method):
+def dop_product(lib_peak, exp_peak, match_method):
+    """
+    this function can calculate two peaks' dot product in two ways - forward and reverse
+    :param lib_peak: a pandas data frame, contains mz-intensity list
+    :param exp_peak:
+    :param match_method: forward or reverse
+    :return: dot product, a scalar
+    """
+    # print(lib_peak.mz**3)
+    lib_peak_vector = np.multiply(np.array(lib_peak.mz)**3, np.array(lib_peak.int)**0.6)
+    exp_peak_vector = np.multiply(np.array(exp_peak.mz)**3, np.array(exp_peak.int)**0.6)
+    inx = np.empty((0))
+    if match_method == 'forward':
+        inx = np.append(inx, np.where(exp_peak_vector != 0))
+    elif match_method == 'reverse':
+        inx = np.append(inx, np.where(lib_peak_vector != 0))
+    else:
+        print('Please input correct match method, only \'forward\' or \'reverse\' can be accepted')
+    # print('inx is', inx.astype(int))
+    v1 = lib_peak_vector[inx.astype(int)]
+    v2 = exp_peak_vector[inx.astype(int)]
+    # print(v1)
+    # print(v2)
+    return np.dot(v1, v2)/(norm(v1)*norm(v2))
+    # print(type(lib_peak_vector))
+    # print(type(exp_peak_vector))
+
+
+def ms2_compare(lib_peak_name, exp_peak_name, ms2_info_all, compare_method):
     """
     this function is used to compare two different peaks, if they have similar ms1 and rt
-    :param peak_name1:
-    :param peak_name2:
+    :param lib_peak_name:
+    :param exp_peak_name:
     :param ms2_info_all: MS2 information, a json file
     :param compare_method: forward or reverse
     :return:
     """
     with open(ms2_info_all, 'r') as f_handle:
         ms2_info = json.load(f_handle)
-    peak1 = ms2_info[peak_name1]
-    peak2 = ms2_info[peak_name2]
-    peak1_dic = {peak1['mz'][i]: peak1['int'][i] for i in range(len(peak1['mz']))}
-    peak2_dic = {peak2['mz'][i]: peak2['int'][i] for i in range(len(peak2['mz']))}
-    mz_union_list = np.unique(np.array(list(peak1_dic.keys()) + list(peak2_dic.keys())))
+    lib_peak = ms2_info[lib_peak_name]
+    exp_peak = ms2_info[exp_peak_name]
+    # get 'mz' to 'int' key-value pair
+    lib_peak_dic = {lib_peak['mz'][i]: lib_peak['int'][i] for i in range(len(lib_peak['mz']))}
+    exp_peak_dic = {exp_peak['mz'][i]: exp_peak['int'][i] for i in range(len(exp_peak['mz']))}
+    mz_union_list = np.unique(np.array(list(lib_peak_dic.keys()) + list(exp_peak_dic.keys())))
     peak_union_df = pd.DataFrame(data=[mz_union_list], index=['mz']).T
-    peak1_union = peak_union_df.copy()
-    peak2_union = peak_union_df.copy()
-    peak1_union['int'] = [peak1_dic.get(mz, 0) for mz in mz_union_list]
-    peak2_union['int'] = [peak2_dic.get(mz, 0) for mz in mz_union_list]
+    lib_peak_union = peak_union_df.copy()
+    exp_peak_union = peak_union_df.copy()
+    lib_peak_union['int'] = [lib_peak_dic.get(mz, 0) for mz in mz_union_list]
+    exp_peak_union['int'] = [exp_peak_dic.get(mz, 0) for mz in mz_union_list]
     # print(mz_union_list)
-    # print(peak1_union)
-    # print(peak2_union)
+    # print(lib_peak_union)
+    # print(exp_peak_union)
+    # get mz pairs that need to merge
     mz_pairs = get_mz_pair(mz_union_list, tol_mz=0.01)
     # print(mz_pairs)
     need_remove_inx = []
     for pair in mz_pairs:
+        # remain bigger intensity and remove smaller mz in a pair
         inx = pair['inx'] # a list contains two elements, [0, 1]
-        p1_pair_int = peak1_union.loc[inx].int
-        p2_pair_int = peak2_union.loc[inx].int
-        peak1_union.loc[inx, 'int'] = max(p1_pair_int)
-        peak2_union.loc[inx, 'int'] = max(p2_pair_int)
+        p1_pair_int = lib_peak_union.loc[inx].int
+        p2_pair_int = exp_peak_union.loc[inx].int
+        lib_peak_union.loc[inx, 'int'] = max(p1_pair_int)
+        exp_peak_union.loc[inx, 'int'] = max(p2_pair_int)
         need_remove_inx.append(inx[0])
-    peak1_union = peak1_union.drop(need_remove_inx)
-    peak2_union = peak2_union.drop(need_remove_inx)
-    print(peak1_union)
-    print(peak2_union)
-    print(need_remove_inx)
+    lib_peak_union = lib_peak_union.drop(need_remove_inx)
+    exp_peak_union = exp_peak_union.drop(need_remove_inx)
+    # print(lib_peak_union)
+    # print(exp_peak_union)
+    # print(need_remove_inx)
     # need to calculate dot product between these two peaks
+    dp = dop_product(lib_peak=lib_peak_union, exp_peak=exp_peak_union, match_method='forward')
+    # dp = dop_product(lib_peak=lib_peak_union, exp_peak=exp_peak_union, match_method='reverse')
+    print('dp is', dp)
 
 
 
